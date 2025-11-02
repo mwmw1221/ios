@@ -5,39 +5,49 @@ on:
 
 jobs:
   build-ios:
-    # Używamy najnowszego runnera, który ma najnowszy Xcode.
     runs-on: macos-latest
     
     steps:
-      - name: ⬇️ Checkout repo
+      - name: 1 Checkout repo
         uses: actions/checkout@v4
 
-      - name: 📂 Extract workspace ZIP
+      - name: 2 Extract workspace ZIP
         run: |
           mkdir -p workspace
           unzip -q ./ios-workspace.zip -d ./workspace
-          echo "📂 Zawartość workspace:"
+          echo "Zawartość workspace:"
           ls -R workspace || true
 
-      - name: ⚙️ Select Xcode and check version
+      - name: 3 Select Xcode and check version
         run: |
           # Domyślnie na macos-latest jest już wybrana najnowsza stabilna wersja
           sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
           xcodebuild -version
 
-      - name: ⚙️ Ustaw Schemat Aplikacji
+      - name: 4 Ustaw Schemat Aplikacji
         run: |
           # Schemat Cordova buduje tylko bibliotekę. Używamy schematu aplikacji.
           echo "APP_SCHEME=EKEP" >> $GITHUB_ENV
           echo "ARCHIVE_PATH=$RUNNER_TEMP/EKEP.xcarchive" >> $GITHUB_ENV
           echo "IPA_EXPORT_DIR=$RUNNER_TEMP/ipa_output" >> $GITHUB_ENV
-          echo "📦 Używany schemat: EKEP"
+          echo "Używany schemat EKEP"
 
-      - name: 🛠️ Krok Archiwizacja (Archive) - Kompatybilność dla starych aplikacji
+      - name: 5 Usuń problematyczną wtyczkę InAppBrowser
+        run: |
+          cd workspace
+          # Usuń folder wtyczki. Ścieżka zakłada standardową strukturę projektu Cordova.
+          PLUGIN_DIR="EKEP/Plugins/cordova-plugin-inappbrowser"
+          if [ -d "$PLUGIN_DIR" ]; then
+            rm -rf "$PLUGIN_DIR"
+            echo "Usunięto folder: $PLUGIN_DIR"
+          else
+            echo "Folder $PLUGIN_DIR nie istnieje. Kontynuuję."
+          fi
+          
+      - name: 6 Archiwizacja (Archive) - Zabezpieczenie dla starych aplikacji
         run: |
           cd workspace
           
-          # Polecenie xcodebuild musi być w jednej linii z użyciem '\' dla kontynuacji
           xcodebuild \
             -workspace EKEP.xcworkspace \
             -scheme "${{ env.APP_SCHEME }}" \
@@ -52,8 +62,7 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             clean build | tee ./archive_log.txt
 
-      - name: 📄 Krok Tworzenie ExportOptions.plist (dla Unsigned IPA)
-        # Używamy znaku potoku '|' do definicji wieloliniowego ciągu znaków
+      - name: 7 Tworzenie ExportOptions.plist (dla Unsigned IPA)
         run: |
           cat <<EOF > ExportOptions.plist
           <?xml version="1.0" encoding="UTF-8"?>
@@ -76,7 +85,7 @@ jobs:
           </plist>
           EOF
           
-      - name: 🚀 Krok  Eksport do .ipa (Export Archive)
+      - name: 8 Eksport do .ipa (Export Archive)
         run: |
           mkdir -p "${{ env.IPA_EXPORT_DIR }}"
           
@@ -88,26 +97,22 @@ jobs:
           # Znajdź wygenerowany plik IPA, aby go przesłać
           IPA_FILE=$(find "${{ env.IPA_EXPORT_DIR }}" -name "*.ipa" -maxdepth 1 | head -n 1)
           echo "IPA_FILE=$IPA_FILE" >> $GITHUB_ENV
-          echo "✅ Plik .ipa wygenerowany i gotowy do wysłania."
+          echo "Plik .ipa wygenerowany i gotowy do wysłania."
 
-      - name: 📤 Upload .ipa Artifact
+      - name: 9 Upload .ipa Artifact
         uses: actions/upload-artifact@v4
         with:
           name: build-ios-unsigned-ipa
-          # Używamy ścieżki do folderu, w którym znajduje się .ipa
           path: ${{ env.IPA_EXPORT_DIR }}
           
-      # --- Opcjonalne kroki archiwizacji całego projektu ---
-      
-      - name: 📦 Archive full post-build workspace
+      - name: 10 Archive full post-build workspace
         run: |
-          echo "📦 Tworzenie archiwum końcowego stanu projektu..."
+          echo "Tworzenie archiwum końcowego stanu projektu..."
           cd workspace
-          # Wykluczanie dużych/niepotrzebnych katalogów z ZIP
           zip -r ../ios_full_build.zip . -x "*.git*" -x "*node_modules*" -x "*.DS_Store*"
           cd ..
             
-      - name: 📤 Upload full build ZIP
+      - name: 11 Upload full build ZIP
         uses: actions/upload-artifact@v4
         with:
           name: ios-full-build
