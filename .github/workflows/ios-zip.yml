@@ -1,4 +1,4 @@
-name: Build iOS from ZIP (Unsigned IPA)
+name: Build iOS from ZIP (Czyste Unsigned IPA dla Esign/Feather)
 
 on:
   workflow_dispatch:
@@ -26,7 +26,6 @@ jobs:
 
       - name: 4 Ustaw Schemat Aplikacji
         run: |
-          # Schemat Cordova buduje tylko bibliotekę. Używamy schematu aplikacji.
           echo "APP_SCHEME=EKEP" >> $GITHUB_ENV
           echo "ARCHIVE_PATH=$RUNNER_TEMP/EKEP.xcarchive" >> $GITHUB_ENV
           echo "IPA_EXPORT_DIR=$RUNNER_TEMP/ipa_output" >> $GITHUB_ENV
@@ -48,7 +47,6 @@ jobs:
         run: |
           cd workspace
           
-          # Pełne wyłączenie podpisu dla archiwizacji (tworzy 'unsigned archive')
           xcodebuild \
             -workspace EKEP.xcworkspace \
             -scheme "${{ env.APP_SCHEME }}" \
@@ -56,28 +54,31 @@ jobs:
             -configuration Release \
             archive \
             -archivePath "${{ env.ARCHIVE_PATH }}" \
+            
+            # Flagi kompatybilnosci dla Ionic 1 na nowym Xcode
+            IPHONEOS_DEPLOYMENT_TARGET=12.0 \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            
+            # Wylaczenie podpisywania (Code Signing)
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            IPHONEOS_DEPLOYMENT_TARGET=12.0 \
-            COMPILER_INDEX_STORE_ENABLE=NO \
             clean build | tee ./archive_log.txt
 
-      - name: 7 Tworzenie ExportOptions.plist (dla Unsigned IPA - metoda 'debugging')
+      - name: 7 Tworzenie ExportOptions.plist (metoda 'none')
         run: |
           cat <<EOF > ExportOptions.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
+              <!-- METODA 'none' jest jedyną, która GWARANTUJE, że Team ID nie jest potrzebne -->
               <key>method</key>
-              <string>debugging</string>
+              <string>none</string> 
               <key>destination</key>
               <string>export</string>
               <key>signingStyle</key>
               <string>manual</string>
-              <key>signingCertificate</key>
-              <string>-</string>
               <!-- Wylaczanie Bitcode, kluczowe dla starych projektow Ionic 1 -->
               <key>compileBitcode</key>
               <false/>
@@ -92,7 +93,8 @@ jobs:
           xcodebuild -exportArchive \
             -archivePath "${{ env.ARCHIVE_PATH }}" \
             -exportOptionsPlist "ExportOptions.plist" \
-            -exportPath "${{ env.IPA_EXPORT_DIR }}"
+            -exportPath "${{ env.IPA_EXPORT_DIR }}" \
+            -allowProvisioningUpdates
 
       - name: 9 Upload .ipa Artifact
         uses: actions/upload-artifact@v4
