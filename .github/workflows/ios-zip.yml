@@ -39,22 +39,28 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             clean build | tee ../build_log.txt
 
-      - name: Create unsigned .ipa
+      - name: Archive unsigned .ipa
         run: |
-          APP_PATH=$(find workspace -name "*.app" | head -n 1)
-          echo "📱 App found: $APP_PATH"
-
+          APP_PATH=$(find workspace -type d -name "*.app" | grep -v "PlugIns" | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "❌ Nie znaleziono .app w workspace"
+            exit 1
+          fi
+      
+          echo "✅ Znaleziono .app: $APP_PATH"
+      
           mkdir -p output/Payload
           cp -r "$APP_PATH" output/Payload/
+      
           cd output
-          zip -r ../EKEP-unsigned.ipa Payload
-          cd ..
-          echo "✅ Unsigned IPA created at EKEP-unsigned.ipa"
+          zip -r unsigned.ipa Payload
+      
+          echo "📦 Utworzono unsigned.ipa w $(pwd)"
+      
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
           name: ios-unsigned-ipa
-          path: |
-            EKEP-unsigned.ipa
-            build_log.txt
+          path: output/unsigned.ipa
+
