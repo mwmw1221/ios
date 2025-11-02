@@ -37,7 +37,27 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            clean build | tee ../build_log.txt
+            clean build | tee ./build_log.txt
+
+      - name: Znajdź i skopiuj plik .app
+        run: |
+          # Znajdź dynamiczną ścieżkę do DerivedData
+          BUILD_DIR=$(find /Users/runner/Library/Developer/Xcode/DerivedData -name "Release-iphoneos" -type d)
+          APP_PATH=$(find "$BUILD_DIR" -name "*.app" -maxdepth 1)
+          
+          # Utwórz katalog do przechowywania artefaktów
+          mkdir artifacts
+          
+          # Skopiuj plik .app do katalogu artifacts
+          cp -R "$APP_PATH" artifacts/
+          
+          echo "Plik .app znaleziony i skopiowany do artifacts/!"
+      
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-ios-app
+          path: artifacts/
 
       - name: Archive full post-build workspace
         run: |
