@@ -39,28 +39,17 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             clean build | tee ../build_log.txt
 
-      - name: Archive unsigned .ipa
+      - name: Archive full post-build workspace
         run: |
-          APP_PATH=$(find workspace -type d -name "*.app" | grep -v "PlugIns" | head -n 1)
-          if [ -z "$APP_PATH" ]; then
-            echo "❌ Nie znaleziono .app w workspace"
-            exit 1
-          fi
+          echo "📦 Tworzenie archiwum końcowego stanu projektu..."
+          cd workspace
+          zip -r ../ios_full_build.zip . -x "*.git*" -x "*node_modules*" -x "*.DS_Store*"
+          cd ..
       
-          echo "✅ Znaleziono .app: $APP_PATH"
-      
-          mkdir -p output/Payload
-          cp -r "$APP_PATH" output/Payload/
-      
-          cd output
-          zip -r unsigned.ipa Payload
-      
-          echo "📦 Utworzono unsigned.ipa w $(pwd)"
-      
-
-      - name: Upload unsigned IPA
+      - name: Upload full build ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: ios-unsigned-ipa
-          path: output/unsigned.ipa
+          name: ios-full-build
+          path: ios_full_build.zip
+
 
