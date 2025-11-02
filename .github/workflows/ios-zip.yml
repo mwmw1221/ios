@@ -1,12 +1,7 @@
-name: Build iOS from ZIP in Repo
+name: Build iOS from ZIP in repo
 
 on:
   workflow_dispatch:
-    inputs:
-      zip_path:
-        description: "Ścieżka do ZIPa z workspace Ionic (np. ./ios-workspace.zip)"
-        required: true
-        default: "./ios-workspace.zip"
 
 jobs:
   build-ios:
@@ -16,21 +11,12 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Verify ZIP presence
-        run: |
-          if [ ! -f "${{ github.event.inputs.zip_path }}" ]; then
-            echo "❌ Nie znaleziono pliku ZIP: ${{ github.event.inputs.zip_path }}"
-            exit 1
-          fi
-          echo "✅ ZIP znaleziony: ${{ github.event.inputs.zip_path }}"
-          ls -lh ${{ github.event.inputs.zip_path }}
-
-      - name: Extract workspace
+      - name: Extract workspace ZIP
         run: |
           mkdir -p workspace
-          unzip -q ${{ github.event.inputs.zip_path }} -d workspace
+          unzip -q ./ios-workspace.zip -d ./workspace
           echo "📂 Zawartość workspace:"
-          ls -R workspace | head -n 50
+          ls -R workspace || true
 
       - name: Select Xcode and check version
         run: |
@@ -39,37 +25,36 @@ jobs:
 
       - name: Build iOS app (Release, no signing)
         run: |
-          cd workspace/platforms/ios
-          echo "🔍 Wykrywanie schematu..."
-          SCHEME=$(xcodebuild -list -json | jq -r '.workspace.schemes[0]')
+          cd workspace
+          SCHEME=$(xcodebuild -list -json | jq -r '.workspace.schemes[0] // .project.schemes[0]')
           echo "📦 Scheme: $SCHEME"
 
           xcodebuild \
-            -workspace *.xcworkspace \
+            -workspace EKEP.xcworkspace \
             -scheme "$SCHEME" \
             -configuration Release \
             -sdk iphoneos \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            clean build | tee ../../build_log.txt
+            clean build | tee ../build_log.txt
 
       - name: Create unsigned .ipa
         run: |
-          APP_PATH=$(find workspace/platforms/ios/build -type d -name "*.app" | head -n 1)
-          echo "📱 App path: $APP_PATH"
+          APP_PATH=$(find workspace -name "*.app" | head -n 1)
+          echo "📱 App found: $APP_PATH"
 
-          mkdir -p workspace/output/Payload
-          cp -R "$APP_PATH" workspace/output/Payload/
-          cd workspace/output
-          zip -r ../MyApp-unsigned.ipa Payload
-          cd ../..
-          echo "✅ Utworzono IPA: workspace/MyApp-unsigned.ipa"
+          mkdir -p output/Payload
+          cp -r "$APP_PATH" output/Payload/
+          cd output
+          zip -r ../EKEP-unsigned.ipa Payload
+          cd ..
+          echo "✅ Unsigned IPA created at EKEP-unsigned.ipa"
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
           name: ios-unsigned-ipa
           path: |
-            workspace/MyApp-unsigned.ipa
-            workspace/build_log.txt
+            EKEP-unsigned.ipa
+            build_log.txt
