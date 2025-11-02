@@ -1,0 +1,17 @@
+name: Upload local iOS workspace
+
+on:
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upload your workspace ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-workspace
+          path: ios-workspace.zip
