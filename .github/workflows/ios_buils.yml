@@ -1,0 +1,101 @@
+name: Build iOS from ZIP Artifact (Unsigned IPA)
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_name:
+        description: "Nazwa artefaktu ZIP z workspace Ionic (np. ios-workspace)"
+        required: true
+        default: "ios-workspace"
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Download Ionic iOS workspace ZIP
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.event.inputs.artifact_name }}
+          path: ./workspace_zip
+
+      - name: Extract workspace
+        run: |
+          mkdir -p workspace
+          unzip -q ./workspace_zip/*.zip -d ./workspace
+          ls -R workspace
+
+      - name: Select Xcode and check version
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          xcodebuild -version
+
+      - name: Detect scheme and project
+        id: detect
+        run: |
+          cd workspace/platforms/ios
+          if [ -d "*.xcworkspace" ]; then
+            echo "workspace=true" >> $GITHUB_OUTPUT
+          else
+            echo "workspace=false" >> $GITHUB_OUTPUT
+          fi
+          SCHEME=$(xcodebuild -list -json | jq -r '.workspace.schemes[0]')
+          echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
+          echo "Detected scheme: $SCHEME"
+
+      - name: Build and archive (no signing)
+        run: |
+          cd workspace/platforms/ios
+          SCHEME="${{ steps.detect.outputs.scheme }}"
+
+          xcodebuild \
+            -workspace *.xcworkspace \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath ../../output/App.xcarchive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            clean archive | tee ../../build_log.txt
+
+      - name: Create ExportOptions.plist (unsigned)
+        run: |
+          cat <<EOF > ExportOptions.plist
+          {
+            "method": "ad-hoc",
+            "signingStyle": "manual",
+            "compileBitcode": false,
+            "signingCertificate": "",
+            "provisioningProfiles": {},
+            "teamID": "",
+            "stripSwiftSymbols": true,
+            "thinning": "<none>"
+          }
+          EOF
+          cat ExportOptions.plist
+
+      - name: Export unsigned IPA
+        run: |
+          cd workspace
+          xcodebuild \
+            -exportArchive \
+            -archivePath output/App.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath output/exported \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO | tee export_log.txt
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-unsigned-ipa
+          path: |
+            workspace/output/exported/*.ipa
+            workspace/output/App.xcarchive
+            workspace/build_log.txt
+            workspace/export_log.txt
