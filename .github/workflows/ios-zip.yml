@@ -33,7 +33,7 @@ jobs:
           echo "IPA_EXPORT_DIR=$RUNNER_TEMP/ipa_output" >> $GITHUB_ENV
           echo "📦 Używany schemat: EKEP"
 
-      - name: 🛠️ Krok 1: Archiwizacja (Archive) - Kompatybilność dla starych aplikacji
+      - name: 🛠️ Krok Archiwizacja (Archive) - Kompatybilność dla starych aplikacji
         run: |
           cd workspace
           
@@ -52,7 +52,7 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             clean build | tee ./archive_log.txt
 
-      - name: 📄 Krok 2: Tworzenie ExportOptions.plist (dla Unsigned IPA)
+      - name: 📄 Krok Tworzenie ExportOptions.plist (dla Unsigned IPA)
         # Używamy znaku potoku '|' do definicji wieloliniowego ciągu znaków
         run: |
           cat <<EOF > ExportOptions.plist
@@ -76,7 +76,7 @@ jobs:
           </plist>
           EOF
           
-      - name: 🚀 Krok 3: Eksport do .ipa (Export Archive)
+      - name: 🚀 Krok  Eksport do .ipa (Export Archive)
         run: |
           mkdir -p "${{ env.IPA_EXPORT_DIR }}"
           
