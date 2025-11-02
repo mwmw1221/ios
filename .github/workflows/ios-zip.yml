@@ -61,14 +61,16 @@ jobs:
               <string>development</string>
               <key>destination</key>
               <string>export</string>
+              
+              <!-- Poniższe opcje nakazują Xcode, aby nie szukał aktywnego Team ID -->
               <key>signingStyle</key>
               <string>manual</string>
-              <key>stripSwiftSymbols</key>
-              <true/>
-              <key>provisioningProfiles</key>
-              <dict/>
               <key>signingCertificate</key>
-              <string>-</string>
+              <string>Apple Development</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <!-- Możesz pominąć Team ID w tym trybie -->
+              </dict>
           </dict>
           </plist>
           EOF
@@ -77,15 +79,12 @@ jobs:
         run: |
           mkdir -p "${{ env.IPA_EXPORT_DIR }}"
           
+          # Dodaj flagę -allowProvisioningUpdates. Czasami pomaga, nawet przy niesygnowanym budowaniu.
           xcodebuild -exportArchive \
             -archivePath "${{ env.ARCHIVE_PATH }}" \
             -exportOptionsPlist "ExportOptions.plist" \
-            -exportPath "${{ env.IPA_EXPORT_DIR }}"
-            
-          # Znajdź wygenerowany plik IPA, aby go przesłać
-          IPA_FILE=$(find "${{ env.IPA_EXPORT_DIR }}" -name "*.ipa" -maxdepth 1 | head -n 1)
-          echo "IPA_FILE=$IPA_FILE" >> $GITHUB_ENV
-          echo "Plik .ipa wygenerowany i gotowy do wysłania."
+            -exportPath "${{ env.IPA_EXPORT_DIR }}" \
+            -allowProvisioningUpdates # Dodatkowa flaga dla pewności
 
       - name: 9 Upload .ipa Artifact
         uses: actions/upload-artifact@v4
