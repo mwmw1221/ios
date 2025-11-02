@@ -31,11 +31,24 @@ jobs:
           echo "ARCHIVE_PATH=$RUNNER_TEMP/EKEP.xcarchive" >> $GITHUB_ENV
           echo "IPA_EXPORT_DIR=$RUNNER_TEMP/ipa_output" >> $GITHUB_ENV
           echo "Używany schemat EKEP"
+
+      - name: 5 Usuń problematyczną wtyczkę InAppBrowser
+        run: |
+          cd workspace
+          # Usuń folder wtyczki. Ścieżka zakłada standardową strukturę projektu Cordova.
+          PLUGIN_DIR="EKEP/Plugins/cordova-plugin-inappbrowser"
+          if [ -d "$PLUGIN_DIR" ]; then
+            rm -rf "$PLUGIN_DIR"
+            echo "Usunięto folder: $PLUGIN_DIR"
+          else
+            echo "Folder $PLUGIN_DIR nie istnieje. Kontynuuję."
+          fi
           
-      - name: 6 Archiwizacja (Archive) - Zabezpieczenie dla starych aplikacji
+      - name: 6 Archiwizacja (Archive) - Z fałszywym podpisem ad-hoc i Team ID
         run: |
           cd workspace
           
+          # Użycie tożsamości "Apple Development" w archiwum i podanie Team ID.
           xcodebuild \
             -workspace EKEP.xcworkspace \
             -scheme "${{ env.APP_SCHEME }}" \
@@ -43,14 +56,15 @@ jobs:
             -configuration Release \
             archive \
             -archivePath "${{ env.ARCHIVE_PATH }}" \
-            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_IDENTITY="Apple Development" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_ALLOWED=YES \
             IPHONEOS_DEPLOYMENT_TARGET=12.0 \
             COMPILER_INDEX_STORE_ENABLE=NO \
+            DEVELOPMENT_TEAM="${{ secrets.IOS_TEAM_ID }}" \
             clean build | tee ./archive_log.txt
 
-      - name: 7 Tworzenie ExportOptions.plist (dla Unsigned IPA)
+      - name: 7 Tworzenie ExportOptions.plist (dla Unsigned IPA - metoda 'debugging')
         run: |
           cat <<EOF > ExportOptions.plist
           <?xml version="1.0" encoding="UTF-8"?>
@@ -61,16 +75,10 @@ jobs:
               <string>debugging</string>
               <key>destination</key>
               <string>export</string>
-              
-              <!-- Poniższe opcje nakazują Xcode, aby nie szukał aktywnego Team ID -->
               <key>signingStyle</key>
               <string>manual</string>
               <key>signingCertificate</key>
-              <string>Apple Development</string>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <!-- Możesz pominąć Team ID w tym trybie -->
-              </dict>
+              <string>-</string>
           </dict>
           </plist>
           EOF
@@ -79,12 +87,10 @@ jobs:
         run: |
           mkdir -p "${{ env.IPA_EXPORT_DIR }}"
           
-          # Dodaj flagę -allowProvisioningUpdates. Czasami pomaga, nawet przy niesygnowanym budowaniu.
           xcodebuild -exportArchive \
             -archivePath "${{ env.ARCHIVE_PATH }}" \
             -exportOptionsPlist "ExportOptions.plist" \
-            -exportPath "${{ env.IPA_EXPORT_DIR }}" \
-            -allowProvisioningUpdates # Dodatkowa flaga dla pewności
+            -exportPath "${{ env.IPA_EXPORT_DIR }}"
 
       - name: 9 Upload .ipa Artifact
         uses: actions/upload-artifact@v4
@@ -104,4 +110,3 @@ jobs:
         with:
           name: ios-full-build
           path: ios_full_build.zip
-
