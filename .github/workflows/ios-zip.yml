@@ -1,4 +1,4 @@
-name: Build iOS from ZIP (Czyste Unsigned IPA dla Esign/Feather)
+name: Build iOS from ZIP (Tylko Xcode Archive .xcarchive)
 
 on:
   workflow_dispatch:
@@ -27,8 +27,8 @@ jobs:
       - name: 4 Ustaw Schemat Aplikacji
         run: |
           echo "APP_SCHEME=EKEP" >> $GITHUB_ENV
+          # WAZNE: Zmieniamy nazwe zmiennej, zeby lepiej opisywala artefakt
           echo "ARCHIVE_PATH=$RUNNER_TEMP/EKEP.xcarchive" >> $GITHUB_ENV
-          echo "IPA_EXPORT_DIR=$RUNNER_TEMP/ipa_output" >> $GITHUB_ENV
           echo "Używany schemat EKEP"
 
       - name: 5 Usuń problematyczną wtyczkę InAppBrowser
@@ -65,52 +65,10 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             clean build | tee ./archive_log.txt
 
-      - name: 7 Tworzenie ExportOptions.plist (metoda 'none')
-        run: |
-          cat <<EOF > ExportOptions.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <!-- METODA 'none' jest jedyną, która GWARANTUJE, że Team ID nie jest potrzebne -->
-              <key>method</key>
-              <string>none</string> 
-              <key>destination</key>
-              <string>export</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <!-- Wylaczanie Bitcode, kluczowe dla starych projektow Ionic 1 -->
-              <key>compileBitcode</key>
-              <false/>
-          </dict>
-          </plist>
-          EOF
-          
-      - name: 8 Eksport do .ipa (Export Archive)
-        run: |
-          mkdir -p "${{ env.IPA_EXPORT_DIR }}"
-          
-          xcodebuild -exportArchive \
-            -archivePath "${{ env.ARCHIVE_PATH }}" \
-            -exportOptionsPlist "ExportOptions.plist" \
-            -exportPath "${{ env.IPA_EXPORT_DIR }}" \
-            -allowProvisioningUpdates
-
-      - name: 9 Upload .ipa Artifact
+      - name: 7 Upload Xcode Archive Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: build-ios-unsigned-ipa
-          path: ${{ env.IPA_EXPORT_DIR }}
+          name: xcode-archive-ekep
+          path: ${{ env.ARCHIVE_PATH }}
           
-      - name: 10 Archive full post-build workspace
-        run: |
-          echo "Tworzenie archiwum końcowego stanu projektu..."
-          cd workspace
-          zip -r ../ios_full_build.zip . -x "*.git*" -x "*node_modules*" -x "*.DS_Store*"
-          cd ..
-            
-      - name: 11 Upload full build ZIP
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-full-build
-          path: ios_full_build.zip
+      # UWAGA: Kroki 7, 8, 10 i 11 zostaly usuniete/zastapione
