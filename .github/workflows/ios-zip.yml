@@ -32,27 +32,25 @@ jobs:
           echo "IPA_EXPORT_DIR=$RUNNER_TEMP/ipa_output" >> $GITHUB_ENV
           echo "📦 Używany schemat: EKEP"
 
-      - name: 🛠️ Krok 1 Archiwizacja (Archive) - Z podniesionym Targetem
-        run: |
+       - name: 🛠️ Krok 1: Archiwizacja (Archive) - Kompatybilność dla starych aplikacji
+         run: |
           cd workspace
           
-          # Podnosimy minimalny target wdrożenia do iOS 12.0, 
-          # co jest wymogiem najnowszego Xcode.
-          # Używamy zmiennej APP_SCHEME z ENV
-          
           xcodebuild \
-            -workspace EKEP.xcworkspace \
-            -scheme "${{ env.APP_SCHEME }}" \
-            -sdk iphoneos \
-            -configuration Release \
+            # ... (istniejące argumenty) ...
             archive \
             -archivePath "${{ env.ARCHIVE_PATH }}" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            # KLUCZOWA ZMIANA: Wymuś minimalny iOS 12.0
+            
+            # 1. Obchodzimy błąd: Wymuszamy minimalny target 12.0
             IPHONEOS_DEPLOYMENT_TARGET=12.0 \
+            # 2. Wyłączamy nowoczesne funkcje kompilatora, które psują stare wtyczki
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            
             clean build | tee ./archive_log.txt
+
         
       - name: 📄 Krok 2 Tworzenie ExportOptions.plist (dla Unsigned IPA)
         # Tworzy plik ExportOptions.plist w katalogu roboczym
