@@ -27,7 +27,6 @@ jobs:
       - name: 4 Ustaw Schemat Aplikacji
         run: |
           echo "APP_SCHEME=EKEP" >> $GITHUB_ENV
-          # WAZNE: Zmieniamy nazwe zmiennej, zeby lepiej opisywala artefakt
           echo "ARCHIVE_PATH=$RUNNER_TEMP/EKEP.xcarchive" >> $GITHUB_ENV
           echo "Używany schemat EKEP"
 
@@ -55,8 +54,13 @@ jobs:
             archive \
             -archivePath "${{ env.ARCHIVE_PATH }}" \
             
-            # Flagi kompatybilnosci dla Ionic 1 na nowym Xcode
+            # 1. KLUCZOWA ZMIANA: Wstrzyknięcie pustego Team ID, aby zadowolić Xcode.
+            DEVELOPMENT_TEAM="" \
+            
+            # 2. Wymuszenie minimalnego targetu wdrożenia na 12.0 (usuwa warning)
             IPHONEOS_DEPLOYMENT_TARGET=12.0 \
+            
+            # Flagi kompatybilnosci dla Ionic 1 na nowym Xcode
             COMPILER_INDEX_STORE_ENABLE=NO \
             
             # Wylaczenie podpisywania (Code Signing)
