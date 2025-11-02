@@ -1,4 +1,4 @@
-name: Build iOS from ZIP in repo
+name: Build iOS from ZIP (Unsigned IPA)
 
 on:
   workflow_dispatch:
@@ -6,82 +6,104 @@ on:
 jobs:
   build-ios:
     runs-on: macos-latest
-
+    
     steps:
-      - name: Checkout repo
+      - name: ⬇️ Checkout repo
         uses: actions/checkout@v4
 
-      - name: Extract workspace ZIP
+      - name: 📂 Extract workspace ZIP
         run: |
           mkdir -p workspace
           unzip -q ./ios-workspace.zip -d ./workspace
           echo "📂 Zawartość workspace:"
           ls -R workspace || true
 
-      - name: Select Xcode and check version
+      - name: ⚙️ Select Xcode and check version
         run: |
+          # Domyślnie na macos-latest jest już wybrana najnowsza stabilna wersja
           sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
           xcodebuild -version
 
-      - name: Build iOS app (Release, no signing)
+      - name: ⚙️ Ustaw Schemat Aplikacji
+        run: |
+          # Schemat Cordova buduje tylko bibliotekę. Używamy schematu aplikacji.
+          echo "APP_SCHEME=EKEP" >> $GITHUB_ENV
+          echo "ARCHIVE_PATH=$RUNNER_TEMP/EKEP.xcarchive" >> $GITHUB_ENV
+          echo "IPA_EXPORT_DIR=$RUNNER_TEMP/ipa_output" >> $GITHUB_ENV
+          echo "📦 Używany schemat: EKEP"
+
+      - name: 🛠️ Krok 1: Archiwizacja (Archive)
         run: |
           cd workspace
-          # TA LINIJKA WYBIERAŁA ZŁY SCHEMAT: 
-          # SCHEME=$(xcodebuild -list -json | jq -r '.workspace.schemes[0] // .project.schemes[0]')
           
-          # JAWNIE USTAWIAMY SCHEMAT NAZWY PROJEKTU (EKEP)
-          SCHEME="EKEP"
-          echo "📦 Scheme: $SCHEME (Ustawiono jawnie)"
-          
+          # Archiwizacja projektu
           xcodebuild \
             -workspace EKEP.xcworkspace \
-            -scheme "$SCHEME" \
-            -configuration Release \
+            -scheme "${{ env.APP_SCHEME }}" \
             -sdk iphoneos \
+            -configuration Release \
+            archive \
+            -archivePath "${{ env.ARCHIVE_PATH }}" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            clean build | tee ./build_log.txt
-
-      - name: Znajdź i skopiuj plik .app (Odporny na DerivedData)
+            clean build | tee ./archive_log.txt
+        
+      - name: 📄 Krok 2: Tworzenie ExportOptions.plist (dla Unsigned IPA)
+        # Tworzy plik ExportOptions.plist w katalogu roboczym
         run: |
-          # Ścieżka bazowa jest stała. Przekierowujemy błędy do /dev/null
-          # Szukamy pliku .app w katalogach Release-iphoneos 
-          APP_PATH=$(find /Users/runner/Library/Developer/Xcode/DerivedData \
-            -type d \
-            -path '*Products/Release-iphoneos/*.app' \
-            -maxdepth 5 2>/dev/null | head -n 1)
-
-          if [ -z "$APP_PATH" ]; then
-            echo "❌ Krok nie powiódł się: Nie znaleziono żadnego pliku .app w DerivedData."
-            echo "Upewnij się, że schemat kompilacji był poprawny (np. EKEP, a nie Cordova)."
-            exit 1
-          fi
-
-          # 3. Kopiowanie i przesyłanie jako Artifact
-          mkdir -p artifacts
-          cp -R "$APP_PATH" artifacts/
+          cat <<EOF > ExportOptions.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>development</string>  <key>destination</key>
+              <string>export</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>stripSwiftSymbols</key>
+              <true/>
+              <key>provisioningProfiles</key>
+              <dict/>
+              <key>signingCertificate</key>
+              <string>-</string>
+          </dict>
+          </plist>
+          EOF
           
-          echo "✅ Plik .app znaleziony w: $APP_PATH"
-          echo "✅ Skopiowany do: artifacts/$(basename "$APP_PATH")"
+      - name: 🚀 Krok 3: Eksport do .ipa (Export Archive)
+        run: |
+          mkdir -p "${{ env.IPA_EXPORT_DIR }}"
+          
+          xcodebuild -exportArchive \
+            -archivePath "${{ env.ARCHIVE_PATH }}" \
+            -exportOptionsPlist "ExportOptions.plist" \
+            -exportPath "${{ env.IPA_EXPORT_DIR }}"
+            
+          # Znajdź wygenerowany plik IPA, aby go przesłać
+          IPA_FILE=$(find "${{ env.IPA_EXPORT_DIR }}" -name "*.ipa" -maxdepth 1 | head -n 1)
+          echo "IPA_FILE=$IPA_FILE" >> $GITHUB_ENV
+          echo "✅ Plik .ipa wygenerowany i gotowy do wysłania."
 
-      - name: Upload Artifact
+      - name: 📤 Upload .ipa Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: build-ios-app
-          path: artifacts/
-
-      - name: Archive full post-build workspace
+          name: build-ios-unsigned-ipa
+          # Używamy ścieżki do folderu, w którym znajduje się .ipa
+          path: ${{ env.IPA_EXPORT_DIR }}
+          
+      # --- Opcjonalne kroki archiwizacji całego projektu ---
+      
+      - name: 📦 Archive full post-build workspace
         run: |
           echo "📦 Tworzenie archiwum końcowego stanu projektu..."
           cd workspace
           zip -r ../ios_full_build.zip . -x "*.git*" -x "*node_modules*" -x "*.DS_Store*"
           cd ..
-      
-      - name: Upload full build ZIP
+            
+      - name: 📤 Upload full build ZIP
         uses: actions/upload-artifact@v4
         with:
           name: ios-full-build
           path: ios_full_build.zip
-
-
