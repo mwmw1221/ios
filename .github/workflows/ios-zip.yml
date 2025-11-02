@@ -39,19 +39,33 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             clean build | tee ./build_log.txt
 
-      - name: Znajdź i skopiuj plik .app
+      - name: Znajdź i skopiuj plik .app (Poprawiona Wersja)
         run: |
-          # Znajdź dynamiczną ścieżkę do DerivedData
-          BUILD_DIR=$(find /Users/runner/Library/Developer/Xcode/DerivedData -name "Release-iphoneos" -type d)
-          APP_PATH=$(find "$BUILD_DIR" -name "*.app" -maxdepth 1)
+          # 1. Zlokalizuj katalog wynikowy kompilacji (.app)
+          # Szukamy katalogu 'Release-iphoneos' wewnątrz DerivedData.
+          # Użycie -path '*Release-iphoneos' zapewni, że znajdziemy właściwy katalog Build/Products.
+          BUILD_PRODUCTS_PATH=$(find /Users/runner/Library/Developer/Xcode/DerivedData -type d -name "Release-iphoneos" 2>/dev/null | grep 'Products/Release-iphoneos')
           
-          # Utwórz katalog do przechowywania artefaktów
-          mkdir artifacts
+          if [ -z "$BUILD_PRODUCTS_PATH" ]; then
+            echo "❌ Błąd: Nie znaleziono katalogu 'Release-iphoneos' w DerivedData."
+            exit 1
+          fi
           
-          # Skopiuj plik .app do katalogu artifacts
+          # 2. Znajdź plik .app w znalezionym katalogu
+          # Używamy ścieżki znalezionej w kroku 1
+          APP_PATH=$(find "$BUILD_PRODUCTS_PATH" -type d -name "*.app" -maxdepth 1)
+      
+          if [ -z "$APP_PATH" ]; then
+            echo "❌ Błąd: Nie znaleziono pliku .app w ścieżce: $BUILD_PRODUCTS_PATH"
+            exit 1
+          fi
+      
+          # 3. Kopiowanie i przesyłanie jako Artifact
+          mkdir -p artifacts
           cp -R "$APP_PATH" artifacts/
           
-          echo "Plik .app znaleziony i skopiowany do artifacts/!"
+          echo "✅ Plik .app znaleziony: $APP_PATH"
+          echo "✅ Skopiowany do: artifacts/"
       
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
