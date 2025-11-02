@@ -44,11 +44,11 @@ jobs:
             echo "Folder $PLUGIN_DIR nie istnieje. Kontynuuję."
           fi
           
-      - name: 6 Archiwizacja (Archive) - Z fałszywym podpisem ad-hoc i Team ID
+      - name: 6 Archiwizacja (Archive) - Pelne wylaczenie podpisywania
         run: |
           cd workspace
           
-          # Użycie tożsamości "Apple Development" w archiwum i podanie Team ID.
+          # Pełne wyłączenie podpisu dla archiwizacji (tworzy 'unsigned archive')
           xcodebuild \
             -workspace EKEP.xcworkspace \
             -scheme "${{ env.APP_SCHEME }}" \
@@ -56,12 +56,11 @@ jobs:
             -configuration Release \
             archive \
             -archivePath "${{ env.ARCHIVE_PATH }}" \
-            CODE_SIGN_IDENTITY="Apple Development" \
+            CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGNING_ALLOWED=NO \
             IPHONEOS_DEPLOYMENT_TARGET=12.0 \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            DEVELOPMENT_TEAM="${{ secrets.IOS_TEAM_ID }}" \
             clean build | tee ./archive_log.txt
 
       - name: 7 Tworzenie ExportOptions.plist (dla Unsigned IPA - metoda 'debugging')
@@ -79,6 +78,9 @@ jobs:
               <string>manual</string>
               <key>signingCertificate</key>
               <string>-</string>
+              <!-- Wylaczanie Bitcode, kluczowe dla starych projektow Ionic 1 -->
+              <key>compileBitcode</key>
+              <false/>
           </dict>
           </plist>
           EOF
