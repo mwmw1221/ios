@@ -53,7 +53,7 @@ jobs:
             -workspace EKEP.xcworkspace \
             -scheme "${{ env.APP_SCHEME }}" \
             -sdk iphoneos \
-            -configuration Release \
+            -configuration Debu \
             archive \
             -archivePath "${{ env.ARCHIVE_PATH }}" \
             CODE_SIGN_IDENTITY="" \
