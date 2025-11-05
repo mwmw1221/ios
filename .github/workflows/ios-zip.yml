@@ -24,6 +24,13 @@ jobs:
           echo "Zawartość workspace:"
           ls -R workspace || true
 
+      - name: Install CocoaPods
+        run: |
+          cd workspace
+          sudo gem install cocoapods
+          pod repo update
+          pod install
+
       - name: 3 Select Xcode and check version
         run: |
           # Domyślnie na macos-latest jest już wybrana najnowsza stabilna wersja
