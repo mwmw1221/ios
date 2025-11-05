@@ -2,6 +2,12 @@ name: Build iOS from ZIP (Unsigned IPA)
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main      # uruchamiaj tylko, gdy commit trafia na gałąź "main"
+  pull_request:
+    branches:
+      - main      # oraz przy PR-ach do main
 
 jobs:
   build-ios:
