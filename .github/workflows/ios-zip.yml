@@ -92,21 +92,28 @@ jobs:
           </plist>
           EOF
 
-      - name: 9 Upload .ipa Artifact
+      - name: 9 Upload .app Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-ios-app
+          path: ${{ env.ARCHIVE_PATH }}/Products/Applications/*.app
+
+      - name: 9b Upload .ipa Artifact
         uses: actions/upload-artifact@v4
         with:
           name: build-ios-unsigned-ipa
           path: ${{ env.ARCHIVE_PATH }}
-          
+
       - name: 10 Archive full post-build workspace
         run: |
           echo "Tworzenie archiwum końcowego stanu projektu..."
           cd workspace
           zip -r ../ios_full_build.zip . -x "*.git*" -x "*node_modules*" -x "*.DS_Store*"
           cd ..
-            
+
       - name: 11 Upload full build ZIP
         uses: actions/upload-artifact@v4
         with:
           name: ios-full-build
           path: ios_full_build.zip
+
