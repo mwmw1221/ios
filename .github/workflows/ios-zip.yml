@@ -17,43 +17,77 @@ jobs:
       - name: 1 Checkout repo
         uses: actions/checkout@v4
 
-      - name: 2 Extract workspace ZIP
+      - name: 2 Extract workspace ZIP (roboczy katalog w RUNNER_TEMP, check + ditto)
         run: |
-          mkdir -p workspace
-          unzip -q ./ios-workspace.zip -d ./workspace
-          echo "Zawartość workspace:"
-          ls -R workspace || true
+          set -euo pipefail
+
+          ZIP_PATH="$GITHUB_WORKSPACE/ios-workspace.zip"
+          echo "Sprawdzam obecność ZIP: $ZIP_PATH"
+          if [ ! -f "$ZIP_PATH" ]; then
+            echo "Błąd: $ZIP_PATH nie istnieje"
+            exit 1
+          fi
+
+          echo "Sprawdzam wolne miejsce przed rozpakowaniem:"
+          df -h .
+
+          # Test integralności archiwum ZIP — jeśli ZIP jest uszkodzony, zakończymy z błędem,
+          # zamiast próbować rozpakować i dostawać nieczytelne/obcięte pliki.
+          echo "Testuję archiwum ZIP (unzip -t):"
+          if ! unzip -t "$ZIP_PATH" >/tmp/unzip_test.txt 2>&1; then
+            echo "Test unzip nie powiódł się — możliwe, że ZIP jest uszkodzony. Wyświetlam log (ostatnie 200 linii):"
+            tail -n 200 /tmp/unzip_test.txt || true
+            exit 1
+          fi
+
+          # Rozpakowujemy do RUNNER_TEMP, aby nie zapchać katalogu repo i zminimalizować
+          # problemów z prawami/dostępem. Na macOS używamy 'ditto' — poprawnie obsługuje
+          # nazwy plików i zasoby HFS/APFS (często lepsze niż unzip dla plików z macOS/Windows).
+          TARGET="$RUNNER_TEMP/workspace"
+          rm -rf "$TARGET"
+          mkdir -p "$TARGET"
+
+          echo "Rozpakowywanie za pomocą ditto do $TARGET ..."
+          # --sequesterRsrc i --rsrc przydatne dla zachowania zasobów (jeżeli są)
+          ditto -xk --sequesterRsrc --rsrc "$ZIP_PATH" "$TARGET"
+
+          echo "Zawartość workspace (pierwsze 200 linii ls -R):"
+          ls -R "$TARGET" | head -n 200 || true
+
+          echo "Sprawdzam wolne miejsce po rozpakowaniu:"
+          df -h .
 
       - name: Install CocoaPods
         run: |
-          cd workspace
-          sudo gem install cocoapods
-          pod repo update
-          pod install
+          set -euo pipefail
+          cd "$RUNNER_TEMP/workspace"
+          # Zainstaluj CocoaPods (jeśli potrzebne); może wymagać sudo w zależności od środowiska
+          sudo gem install cocoapods --no-document
+          pod repo update || true
+          pod install || true
 
       - name: 3 Select Xcode and check version
         run: |
-          # Domyślnie na macos-latest jest już wybrana najnowsza stabilna wersja
           sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
           xcodebuild -version
 
       - name: 4 Ustaw Schemat Aplikacji
         run: |
-          # Schemat Cordova buduje tylko bibliotekę. Używamy schematu aplikacji.
           echo "APP_SCHEME=EKEP" >> $GITHUB_ENV
           echo "ARCHIVE_PATH=$RUNNER_TEMP/EKEP.xcarchive" >> $GITHUB_ENV
           echo "IPA_EXPORT_DIR=$RUNNER_TEMP/ipa_output" >> $GITHUB_ENV
           echo "Używany schemat EKEP"
-          
+
       - name: 6 Archiwizacja (Archive) - Zabezpieczenie dla starych aplikacji
         run: |
-          cd workspace
+          set -euo pipefail
+          cd "$RUNNER_TEMP/workspace"
           
           xcodebuild \
             -workspace EKEP.xcworkspace \
             -scheme "${{ env.APP_SCHEME }}" \
             -sdk iphoneos \
-            -configuration Debu \
+            -configuration Debug \
             archive \
             -archivePath "${{ env.ARCHIVE_PATH }}" \
             CODE_SIGN_IDENTITY="" \
@@ -78,15 +112,12 @@ jobs:
               <string>development</string>
               <key>destination</key>
               <string>export</string>
-              
-              <!-- Poniższe opcje nakazują Xcode, aby nie szukał aktywnego Team ID -->
               <key>signingStyle</key>
               <string>manual</string>
               <key>signingCertificate</key>
               <string>Apple Development</string>
               <key>provisioningProfiles</key>
               <dict>
-                  <!-- Możesz pominąć Team ID w tym trybie -->
               </dict>
           </dict>
           </plist>
@@ -107,13 +138,12 @@ jobs:
       - name: 10 Archive full post-build workspace
         run: |
           echo "Tworzenie archiwum końcowego stanu projektu..."
-          cd workspace
-          zip -r ../ios_full_build.zip . -x "*.git*" -x "*node_modules*" -x "*.DS_Store*"
-          cd ..
+          cd "$RUNNER_TEMP/workspace"
+          zip -r "$GITHUB_WORKSPACE/ios_full_build.zip" . -x "*.git*" -x "*node_modules*" -x "*.DS_Store*"
+          echo "Utworzono $GITHUB_WORKSPACE/ios_full_build.zip"
 
       - name: 11 Upload full build ZIP
         uses: actions/upload-artifact@v4
         with:
           name: ios-full-build
           path: ios_full_build.zip
-
